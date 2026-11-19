@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kingdom Defense — Heróis & Invasores</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b1220;color:#edf4ff;font-family:Arial,sans-serif}
+header{padding:20px;text-align:center;background:linear-gradient(120deg,#172b42,#102c32);border-bottom:1px solid #29445a}
+header h1{margin:0;color:#70f0b0;font-size:30px}
+header p{margin:7px 0 0;color:#9aadc0}
+main{max-width:1100px;margin:auto;padding:18px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:15px}
+.stat{background:#172438;border:1px solid #293c55;padding:14px;border-radius:12px;text-align:center}
+.stat small{color:#9bacc1}.stat strong{display:block;font-size:23px;margin-top:6px}
+.gold{color:#ffd166}.health{color:#ff7373}.wave{color:#70b9ff}.score{color:#bd9aff}
+.panel{background:#172438;border:1px solid #293c55;padding:14px;border-radius:14px;margin-bottom:14px}
+.section-title{font-weight:bold;margin-bottom:10px}
+.toolbar{display:flex;flex-wrap:wrap;gap:9px}
+button{border:0;border-radius:9px;padding:12px 14px;font-weight:bold;cursor:pointer;color:white;background:#30445e;transition:.15s}
+button:hover{filter:brightness(1.2);transform:translateY(-1px)}
+button.active{outline:2px solid #fff;filter:brightness(1.2)}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.tower-btn{background:#2869b7}.bomb-btn{background:#a94c32}.mage-btn{background:#7652b5}.engineer-btn{background:#287e76}
+.action{background:#238c68}.speed{background:#7553b5}
+#status{text-align:center;color:#ffd166;min-height:22px;margin:12px 0 4px;font-weight:bold}
+#selection-info{color:#aabbd0;font-size:13px;line-height:1.5;margin-top:9px}
+.canvas-wrap{overflow:hidden;border:3px solid #334e5e;border-radius:14px;background:#527e50;box-shadow:0 12px 35px #0007}
+canvas{display:block;width:100%;height:auto;touch-action:manipulation}
+.legend{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;padding:13px;color:#aebdd0;font-size:13px}
+.footer{text-align:center;color:#647990;font-size:12px;padding:18px}
+.help{color:#aabbd0;font-size:14px;line-height:1.7;margin-bottom:0}
+@media(max-width:650px){main{padding:10px}.stats{grid-template-columns:repeat(2,1fr)}button{flex:1;padding:12px 8px;font-size:12px}header h1{font-size:24px}}
+</style>
+</head>
+<body>
+<header>
+<h1>⚔️ KINGDOM DEFENSE</h1>
+<p>Escolha seus defensores. Prepare a estratégia. Proteja o reino.</p>
+</header>
+<main>
+<div class="stats">
+ <div class="stat"><small>❤️ VIDAS</small><strong class="health" id="lives">20</strong></div>
+ <div class="stat"><small>💰 OURO</small><strong class="gold" id="gold">220</strong></div>
+ <div class="stat"><small>🌊 ONDA</small><strong class="wave" id="wave">0</strong></div>
+ <div class="stat"><small>⭐ PONTOS</small><strong class="score" id="score">0</strong></div>
+</div>
+
+<div class="panel">
+ <div class="section-title">🛡️ ESCOLHA SEU DEFENSOR</div>
+ <div class="toolbar">
+  <button class="tower-btn active" id="ranger" onclick="choose('ranger')">🏹 Patrulheiro · 50</button>
+  <button class="bomb-btn" id="cannon" onclick="choose('cannon')">💣 Bombardeiro · 90</button>
+  <button class="mage-btn" id="mage" onclick="choose('mage')">🔮 Mago rúnico · 125</button>
+  <button class="engineer-btn" id="engineer" onclick="choose('engineer')">⚙️ Engenheiro · 150</button>
+  <button class="action" onclick="startWave()">⚔️ Iniciar onda</button>
+  <button class="speed" onclick="changeSpeed()" id="speed">⏩ 1x</button>
+  <button onclick="restart()">🔄 Reiniciar</button>
+ </div>
+ <div id="selection-info">🏹 Patrulheiro: barato e rápido. Ideal para cobrir trechos longos do caminho.</div>
+ <div id="status">Escolha um defensor e clique em uma área livre do mapa.</div>
+</div>
+
+<div class="canvas-wrap"><canvas id="game" width="900" height="560"></canvas></div>
+<div class="legend">
+ <span>🟩 Terreno</span><span>🟫 Caminho dos invasores</span>
+ <span>🏹 Patrulheiro</span><span>💣 Bombardeiro</span><span>🔮 Mago</span><span>⚙️ Engenheiro</span>
+</div>
+<div class="panel">
+ <strong>📜 COMO JOGAR</strong>
+ <p class="help">
+  1. Escolha um defensor e posicione-o no terreno verde.<br>
+  2. Combine torres rápidas, dano em área e ataques poderosos.<br>
+  3. Inicie a onda quando estiver pronto: novos tipos de invasores aparecem conforme você avança.<br>
+  4. Invasores que chegam ao castelo tiram vidas. Se as vidas chegarem a zero, a partida termina.<br>
+  5. Ganhe ouro, adapte sua defesa e sobreviva às ondas!
+ </p>
+</div>
+</main>
+<div class="footer">KINGDOM DEFENSE · Cada defensor tem uma função. Cada onda exige uma estratégia.</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const path=[
+ {x:0,y:115},{x:190,y:115},{x:190,y:375},{x:410,y:375},
+ {x:410,y:175},{x:665,y:175},{x:665,y:455},{x:900,y:455}
+];
+
+const towerData={
+ ranger:{name:"Patrulheiro",icon:"🏹",cost:50,range:155,damage:17,reload:.48,velocity:470,color:"#286dc3",desc:"Barato e rápido. Excelente para enfraquecer muitos inimigos comuns."},
+ cannon:{name:"Bombardeiro",icon:"💣",cost:90,range:175,damage:48,reload:1.35,velocity:290,color:"#a74632",splash:52,desc:"Dispara bombas que causam dano em área. Ótimo contra grupos compactos."},
+ mage:{name:"Mago rúnico",icon:"🔮",cost:125,range:190,damage:29,reload:1.05,velocity:350,color:"#7652b5",slow:.55,slowTime:1.7,desc:"Projéteis rúnicos causam dano e deixam o alvo lento por alguns instantes."},
+ engineer:{name:"Engenheiro",icon:"⚙️",cost:150,range:215,damage:83,reload:1.8,velocity:520,color:"#287e76",desc:"Disparo preciso e pesado, com grande alcance. Ideal contra alvos resistentes."}
+};
+
+// Invasores são liberados gradualmente. Os atributos também crescem um pouco a cada onda.
+const enemyTypes=[
+ {id:"goblin",name:"Goblin saqueador",icon:"👺",unlock:1,hp:42,speed:72,reward:9,color:"#68d66e",size:22},
+ {id:"wolf",name:"Lobo sombrio",icon:"🐺",unlock:2,hp:58,speed:112,reward:12,color:"#aeb7c8",size:23},
+ {id:"orc",name:"Orc brutamontes",icon:"👹",unlock:3,hp:125,speed:53,reward:18,color:"#d58b55",size:26},
+ {id:"troll",name:"Troll de guerra",icon:"🧌",unlock:5,hp:235,speed:39,reward:27,color:"#8dc47a",size:29},
+ {id:"golem",name:"Golem ancestral",icon:"🗿",unlock:8,hp:430,speed:31,reward:42,color:"#b8a58d",size:31}
+];
+
+let towers,enemies,bullets,gold,lives,wave,score,selected,speed;
+let active,gameOver,spawnTimer,spawned,total,last=0;
+const $=id=>document.getElementById(id);
+const say=t=>$("status").textContent=t;
+
+function restart(){
+ towers=[];enemies=[];bullets=[];
+ gold=220;lives=20;wave=0;score=0;selected="ranger";speed=1;
+ active=false;gameOver=false;spawnTimer=0;spawned=0;total=0;last=0;
+ $("speed").textContent="⏩ 1x";updateUI();choose("ranger");
+ say("Escolha seus defensores e prepare o mapa.");draw();
+}
+function updateUI(){
+ $("lives").textContent=lives;$("gold").textContent=gold;
+ $("wave").textContent=wave;$("score").textContent=score;
+}
+function choose(type){
+ selected=type;
+ for(const id of Object.keys(towerData))$(id).classList.toggle("active",id===type);
+ const d=towerData[type];
+ $("selection-info").textContent=d.icon+" "+d.name+" — "+d.cost+" ouro. "+d.desc;
+ say(d.name+" selecionado.");
+}
+function changeSpeed(){
+ speed=speed===1?2:speed===2?3:1;
+ $("speed").textContent="⏩ "+speed+"x";
+}
+function startWave(){
+ if(gameOver||active)return;
+ wave++;active=true;spawned=0;
+ total=6+wave*2;
+ spawnTimer=.6;
+ say("⚔️ Onda "+wave+" começou! "+total+" invasores estão chegando.");
+ updateUI();
+}
+function availableEnemies(){
+ return enemyTypes.filter(t=>wave>=t.unlock);
+}
+function makeEnemy(){
+ const pool=availableEnemies();
+ // A composição dá preferência aos tipos mais recentes, mas mantém alguns inimigos básicos.
+ let type;
+ if(wave<3) type=pool[Math.floor(Math.random()*pool.length)];
+ else {
+  const weights=pool.map((t,i)=>i===pool.length-1?1.2:Math.max(.65,2.5-i*.42));
+  let r=Math.random()*weights.reduce((a,b)=>a+b,0);
+  let idx=0;while(r>weights[idx]){r-=weights[idx];idx++}
+  type=pool[Math.min(idx,pool.length-1)];
+ }
+ const growth=1+(wave-1)*.105;
+ const hp=Math.round(type.hp*growth);
+ enemies.push({
+  type:type.id,name:type.name,icon:type.icon,x:path[0].x,y:path[0].y,index:0,
+  hp,max:hp,velocity:type.speed+Math.min(wave*1.1,13),
+  reward:Math.round(type.reward+wave*1.3),size:type.size,color:type.color,
+  slowTimer:0,slowFactor:1
+ });
+}
+function distanceToSegment(x,y,a,b){
+ const dx=b.x-a.x,dy=b.y-a.y;
+ const t=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy)));
+ return Math.hypot(x-a.x-t*dx,y-a.y-t*dy);
+}
+function onPath(x,y){
+ for(let i=0;i<path.length-1;i++)if(distanceToSegment(x,y,path[i],path[i+1])<39)return true;
+ return false;
+}
+function placeTower(x,y){
+ if(gameOver||active&&lives<=0)return;
+ const d=towerData[selected];
+ if(gold<d.cost){say("❌ Ouro insuficiente para "+d.name+".");return}
+ if(onPath(x,y)){say("❌ Não é possível construir no caminho dos invasores!");return}
+ if(towers.some(t=>Math.hypot(t.x-x,t.y-y)<48)){say("❌ Deixe mais espaço entre os defensores.");return}
+ towers.push({x,y,type:selected,range:d.range,damage:d.damage,reload:d.reload,timer:.2,velocity:d.velocity,color:d.color,splash:d.splash||0,slow:d.slow||0,slowTime:d.slowTime||0});
+ gold-=d.cost;updateUI();say("✅ "+d.name+" posicionado!");
+}
+canvas.addEventListener("pointerdown",e=>{
+ const rect=canvas.getBoundingClientRect();
+ placeTower((e.clientX-rect.left)*canvas.width/rect.width,(e.clientY-rect.top)*canvas.height/rect.height);
+});
+
+function update(dt){
+ if(gameOver)return;
+ dt*=speed;
+ if(active){
+  spawnTimer-=dt;
+  if(spawned<total&&spawnTimer<=0){
+   makeEnemy();spawned++;
+   spawnTimer=Math.max(.43,1.12-wave*.018);
+  }
+ }
+ for(const e of enemies){
+  if(e.hp<=0)continue;
+  if(e.slowTimer>0){e.slowTimer-=dt;if(e.slowTimer<=0)e.slowFactor=1}
+  const target=path[e.index+1];if(!target)continue;
+  const dx=target.x-e.x,dy=target.y-e.y,d=Math.hypot(dx,dy);
+  const step=e.velocity*e.slowFactor*dt;
+  if(d<=step){
+   e.x=target.x;e.y=target.y;e.index++;
+   if(e.index>=path.length-1){
+    e.hp=0;lives--;
+    if(lives<=0){lives=0;gameOver=true;active=false;say("💀 Seu reino caiu! Clique em reiniciar.")}
+    updateUI();
+   }
+  }else{e.x+=dx/d*step;e.y+=dy/d*step}
+ }
+ for(const t of towers){
+  t.timer-=dt;if(t.timer>0)continue;
+  let target=null,progress=-1;
+  for(const e of enemies){
+   if(e.hp<=0||Math.hypot(e.x-t.x,e.y-t.y)>t.range)continue;
+   // Prioriza quem está mais perto do castelo, não simplesmente quem está mais próximo da torre.
+   const p=e.index+(e.index<path.length-1?1-Math.hypot(path[e.index+1].x-e.x,path[e.index+1].y-e.y)/300:1);
+   if(p>progress){target=e;progress=p}
+  }
+  if(target){
+   bullets.push({x:t.x,y:t.y,target,damage:t.damage,velocity:t.velocity,type:t.type,splash:t.splash,slow:t.slow,slowTime:t.slowTime});
+   t.timer=t.reload;
+  }
+ }
+ for(const b of bullets){
+  if(!b.target||b.target.hp<=0){b.target=null;continue}
+  const dx=b.target.x-b.x,dy=b.target.y-b.y,d=Math.hypot(dx,dy),step=b.velocity*dt;
+  if(d<=step){
+   const hit=b.target;
+   hit.hp-=b.damage;
+   if(b.slow){hit.slowFactor=Math.min(hit.slowFactor,b.slow);hit.slowTimer=Math.max(hit.slowTimer,b.slowTime)}
+   if(b.splash){
+    for(const e of enemies)if(e!==hit&&e.hp>0&&Math.hypot(e.x-hit.x,e.y-hit.y)<=b.splash)e.hp-=Math.round(b.damage*.58);
+   }
+   b.target=null;
+  }else{b.x+=dx/d*step;b.y+=dy/d*step}
+ }
+ // Recompensas são concedidas uma única vez, inclusive para inimigos atingidos por dano em área.
+ for(const e of enemies)if(e.hp<=0&&!e.paid){e.paid=true;gold+=e.reward;score+=10;updateUI()}
+ enemies=enemies.filter(e=>e.hp>0);
+ bullets=bullets.filter(b=>b.target!==null);
+ if(active&&spawned>=total&&enemies.length===0){
+  active=false;const bonus=28+wave*5;gold+=bonus;updateUI();
+  say("🏆 Onda concluída! Bônus de "+bonus+" ouro. Prepare sua próxima estratégia.");
+ }
+}
+function draw(){
+ ctx.clearRect(0,0,900,560);
+ ctx.fillStyle="#6fae62";ctx.fillRect(0,0,900,560);
+ ctx.fillStyle="#81bc70";
+ for(let x=20;x<900;x+=42)for(let y=20;y<560;y+=42){ctx.beginPath();ctx.arc(x,y,2,0,7);ctx.fill()}
+ ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#8d673f";ctx.lineWidth=65;
+ ctx.beginPath();path.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();
+ ctx.strokeStyle="#d4b17d";ctx.lineWidth=3;ctx.setLineDash([14,12]);ctx.stroke();ctx.setLineDash([]);
+ ctx.font="25px Arial";ctx.fillText("🌲",40,300);ctx.fillText("🌳",105,475);ctx.fillText("🌲",310,60);ctx.fillText("🌳",525,490);ctx.fillText("🌲",820,75);
+ ctx.fillStyle="#344e82";ctx.fillRect(825,410,75,90);ctx.fillStyle="#d4b66c";ctx.fillRect(839,435,47,65);ctx.font="43px Arial";ctx.fillText("🏰",830,440);
+ for(const t of towers){
+  ctx.fillStyle="rgba(255,255,255,.075)";ctx.beginPath();ctx.arc(t.x,t.y,t.range,0,7);ctx.fill();
+  ctx.fillStyle=t.color;ctx.beginPath();ctx.arc(t.x,t.y,22,0,7);ctx.fill();
+  ctx.strokeStyle="#fff9";ctx.lineWidth=3;ctx.stroke();
+  ctx.font="25px Arial";ctx.textAlign="center";ctx.fillText(towerData[t.type].icon,t.x,t.y+9);
+ }
+ for(const e of enemies){
+  ctx.fillStyle="#24202a";ctx.fillRect(e.x-20,e.y-31,40,7);
+  ctx.fillStyle=e.color;ctx.fillRect(e.x-20,e.y-31,40*Math.max(0,e.hp/e.max),7);
+  ctx.font=(e.size||24)+"px Arial";ctx.textAlign="center";ctx.fillText(e.icon,e.x,e.y+9);
+  if(e.slowTimer>0){ctx.font="13px Arial";ctx.fillText("❄️",e.x+17,e.y-18)}
+ }
+ for(const b of bullets){
+  ctx.fillStyle=b.type==="cannon"?"#ff9f36":b.type==="mage"?"#c9a1ff":b.type==="engineer"?"#75f0d1":"#fff37a";
+  ctx.beginPath();ctx.arc(b.x,b.y,b.type==="cannon"?8:5,0,7);ctx.fill();
+ }
+ ctx.textAlign="left";
+ if(gameOver){
+  ctx.fillStyle="#000b";ctx.fillRect(0,0,900,560);ctx.textAlign="center";
+  ctx.fillStyle="#ff6464";ctx.font="bold 48px Arial";ctx.fillText("FIM DE JOGO",450,250);
+  ctx.fillStyle="white";ctx.font="25px Arial";ctx.fillText("Pontuação: "+score,450,300);
+  ctx.font="18px Arial";ctx.fillText("Pressione Reiniciar para jogar novamente",450,345);ctx.textAlign="left";
+ }
+}
+function loop(now){
+ const dt=Math.min((now-last)/1000,.05)||0;last=now;update(dt);draw();requestAnimationFrame(loop);
+}
+restart();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
